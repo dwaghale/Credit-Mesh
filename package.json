@@ -1,0 +1,9 @@
+{
+  "name": "credit-mesh",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root manifest so Vercel detects Next.js; the app lives in client/ (see vercel.json).",
+  "dependencies": {
+    "next": "^15.5.0"
+  }
+}
