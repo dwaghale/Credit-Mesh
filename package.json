@@ -7,9 +7,13 @@
   ],
   "scripts": {
     "dev": "next dev",
+    "prebuild": "npm run build --workspace=contract",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "^2.5.0",
