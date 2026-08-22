@@ -1,0 +1,4 @@
+# Use npm-style hoisted node_modules so tools like ESLint can resolve
+# plugins that ship as transitive dependencies (e.g. of eslint-config-next).
+[install]
+linker = "hoisted"
