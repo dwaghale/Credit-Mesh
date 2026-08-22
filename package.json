@@ -7,7 +7,7 @@
   ],
   "scripts": {
     "dev": "next dev",
-    "prebuild": "npm run build --workspace=contract",
+    "prebuild": "bun run --cwd packages/contract build",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
