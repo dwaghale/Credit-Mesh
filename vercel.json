@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "installCommand": "curl -fsSL https://bun.sh/install | bash && export PATH=\"$HOME/.bun/bin:$PATH\" && cd client && bun install",
+  "installCommand": "curl -fsSL https://bun.sh/install | bash && export PATH=\"$HOME/.bun/bin:$PATH\" && bun install && cd client && bun install",
   "buildCommand": "export PATH=\"$HOME/.bun/bin:$PATH\" && cd client && bun run build",
   "outputDirectory": "client/.next"
 }
