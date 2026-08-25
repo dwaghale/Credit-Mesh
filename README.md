@@ -1,5 +1,5 @@
 # 🕸️ CreditMesh
-
+Demo Link : https://www.youtube.com/watch?v=m86bdl6D0Qs
 **Decentralized peer-to-peer micro-lending with on-chain credit scores, built on Stellar Soroban.**
 
 CreditMesh lets anyone request a loan, and lets a mesh of lenders collectively fund it — no banks, no middlemen. Every repayment (or default) is recorded on-chain and feeds a transparent credit score, while a shared insurance pool protects lenders when borrowers default.
