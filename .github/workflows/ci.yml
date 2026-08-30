@@ -1,0 +1,97 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =========================================================================
+  # 1. Frontend CI (Next.js, TypeScript, ESLint, Bun)
+  # =========================================================================
+  frontend-ci:
+    name: Frontend Lint, Typecheck & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./client
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun Runtime
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "bun"
+          cache-dependency-path: client/bun.lock
+
+      - name: Install Dependencies & Compile Contract Bindings
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Run ESLint
+        run: bun run lint
+
+      - name: Run TypeScript Type Check
+        run: bunx tsc --noEmit
+
+      - name: Verify Next.js Production Build
+        run: bun run build
+        env:
+          NEXT_PUBLIC_CONTRACT_ID: CAEFU3SKK7E5H7DXAMNZ62KV3OWHS4E3XZOJLDUMSM2KHYQ5ZIBGLHFR
+          NEXT_PUBLIC_RPC_URL: https://soroban-testnet.stellar.org
+          NEXT_PUBLIC_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+
+  # =========================================================================
+  # 2. Smart Contract CI (Rust, Soroban SDK, Unit Tests)
+  # =========================================================================
+  contract-ci:
+    name: Soroban Smart Contract Tests & Verification
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./contract
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+
+      - name: Cache Cargo Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            contract/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('contract/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check Contract Code Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy Linter
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run Soroban Contract Unit Tests
+        run: cargo test --all
