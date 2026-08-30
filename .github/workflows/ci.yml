@@ -35,8 +35,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "bun"
-          cache-dependency-path: client/bun.lock
 
       - name: Install Dependencies & Compile Contract Bindings
         run: bun install --frozen-lockfile || bun install
