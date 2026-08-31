@@ -60,7 +60,12 @@ pub struct UserStats {
 
 impl Default for UserStats {
     fn default() -> Self {
-        Self { loans_taken: 0, repaid_on_time: 0, repaid_late: 0, defaults: 0 }
+        Self {
+            loans_taken: 0,
+            repaid_on_time: 0,
+            repaid_late: 0,
+            defaults: 0,
+        }
     }
 }
 
@@ -99,7 +104,13 @@ impl Contract {
     // -- Borrower -----------------------------------------------------------
 
     /// Create a loan request. Returns the new loan id.
-    pub fn request_loan(env: Env, borrower: Address, amount: i128, term_secs: u64, apr_bps: u32) -> u64 {
+    pub fn request_loan(
+        env: Env,
+        borrower: Address,
+        amount: i128,
+        term_secs: u64,
+        apr_bps: u32,
+    ) -> u64 {
         borrower.require_auth();
         assert!(amount > 0, "amount must be positive");
         assert!(term_secs > 0, "term must be positive");
@@ -121,10 +132,16 @@ impl Contract {
             status: LoanStatus::Pending,
         };
         env.storage().persistent().set(&DataKey::Loan(id), &loan);
-        env.storage().persistent().set(&DataKey::Contribs(id), &Map::<Address, i128>::new(&env));
-        env.storage().persistent().set(&DataKey::Claims(id), &Map::<Address, i128>::new(&env));
+        env.storage()
+            .persistent()
+            .set(&DataKey::Contribs(id), &Map::<Address, i128>::new(&env));
+        env.storage()
+            .persistent()
+            .set(&DataKey::Claims(id), &Map::<Address, i128>::new(&env));
         Self::bump_stats(&env, &borrower, |s| s.loans_taken += 1);
-        env.storage().persistent().extend_ttl(&DataKey::Loan(id), 100, 172_800);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Loan(id), 100, 172_800);
 
         env.events().publish(
             (symbol_short!("loan_req"),),
@@ -155,19 +172,30 @@ impl Contract {
         let mut contribs = Self::contribs(&env, loan_id);
         let prev = contribs.get(lender.clone()).unwrap_or(0);
         contribs.set(lender.clone(), prev + amount);
-        env.storage().persistent().set(&DataKey::Contribs(loan_id), &contribs);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Contribs(loan_id), &contribs);
 
         loan.funded += amount;
         if loan.funded == loan.principal {
             // Fully funded: activate and disburse to borrower
             loan.status = LoanStatus::Active;
             loan.deadline = env.ledger().timestamp() + loan.term_secs;
-            token.transfer(&env.current_contract_address(), &loan.borrower, &loan.principal);
+            token.transfer(
+                &env.current_contract_address(),
+                &loan.borrower,
+                &loan.principal,
+            );
         }
-        env.storage().persistent().set(&DataKey::Loan(loan_id), &loan);
-        env.storage().persistent().extend_ttl(&DataKey::Contribs(loan_id), 100, 172_800);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Loan(loan_id), &loan);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Contribs(loan_id), 100, 172_800);
 
-        env.events().publish((symbol_short!("funded"),), (lender, loan_id, amount));
+        env.events()
+            .publish((symbol_short!("funded"),), (lender, loan_id, amount));
     }
 
     /// Withdraw a lender's payout after a loan is Repaid or Defaulted.
@@ -179,12 +207,15 @@ impl Contract {
             panic_with_error!(&env, Error::NothingToWithdraw);
         }
         claims.set(lender.clone(), 0);
-        env.storage().persistent().set(&DataKey::Claims(loan_id), &claims);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Claims(loan_id), &claims);
 
         let token = TokenClient::new(&env, &Self::token(&env));
         token.transfer(&env.current_contract_address(), &lender, &claim);
 
-        env.events().publish((symbol_short!("withdrew"),), (lender, loan_id, claim));
+        env.events()
+            .publish((symbol_short!("withdrew"),), (lender, loan_id, claim));
         claim
     }
 
@@ -215,11 +246,18 @@ impl Contract {
             Self::settle_claims(&env, &loan, due);
             let on_time = env.ledger().timestamp() <= loan.deadline;
             Self::bump_stats(&env, &borrower, |s| {
-                if on_time { s.repaid_on_time += 1 } else { s.repaid_late += 1 }
+                if on_time {
+                    s.repaid_on_time += 1
+                } else {
+                    s.repaid_late += 1
+                }
             });
-            env.events().publish((symbol_short!("repaid"),), (borrower, loan_id, due));
+            env.events()
+                .publish((symbol_short!("repaid"),), (borrower, loan_id, due));
         }
-        env.storage().persistent().set(&DataKey::Loan(loan_id), &loan);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Loan(loan_id), &loan);
     }
 
     // -- Insurance pool -------------------------------------------------------
@@ -231,9 +269,12 @@ impl Contract {
         let token = TokenClient::new(&env, &Self::token(&env));
         token.transfer(&depositor, &env.current_contract_address(), &amount);
         let pool: i128 = env.storage().instance().get(&DataKey::Pool).unwrap_or(0);
-        env.storage().instance().set(&DataKey::Pool, &(pool + amount));
+        env.storage()
+            .instance()
+            .set(&DataKey::Pool, &(pool + amount));
         env.storage().instance().extend_ttl(100, 172_800);
-        env.events().publish((symbol_short!("pool_dep"),), (depositor, amount));
+        env.events()
+            .publish((symbol_short!("pool_dep"),), (depositor, amount));
     }
 
     /// Anyone may trigger a default once a fully-funded loan is past its
@@ -248,13 +289,17 @@ impl Contract {
         }
 
         loan.status = LoanStatus::Defaulted;
-        env.storage().persistent().set(&DataKey::Loan(loan_id), &loan);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Loan(loan_id), &loan);
 
         let due = Self::total_due(&loan);
         let shortfall = due - loan.repaid;
         let pool: i128 = env.storage().instance().get(&DataKey::Pool).unwrap_or(0);
         let topup = shortfall.min(pool);
-        env.storage().instance().set(&DataKey::Pool, &(pool - topup));
+        env.storage()
+            .instance()
+            .set(&DataKey::Pool, &(pool - topup));
         Self::settle_claims(&env, &loan, loan.repaid + topup);
         Self::bump_stats(&env, &loan.borrower, |s| s.defaults += 1);
 
@@ -290,7 +335,10 @@ impl Contract {
     }
 
     pub fn user_stats(env: Env, user: Address) -> UserStats {
-        env.storage().persistent().get(&DataKey::Stats(user)).unwrap_or_default()
+        env.storage()
+            .persistent()
+            .get(&DataKey::Stats(user))
+            .unwrap_or_default()
     }
 
     pub fn credit_score(env: Env, user: Address) -> i64 {
@@ -303,7 +351,10 @@ impl Contract {
     // -- Internals (not exported) ----------------------------------------------
 
     fn token(env: &Env) -> Address {
-        env.storage().instance().get(&DataKey::Token).expect("not initialized")
+        env.storage()
+            .instance()
+            .get(&DataKey::Token)
+            .expect("not initialized")
     }
 
     fn total_due(loan: &Loan) -> i128 {
@@ -311,11 +362,17 @@ impl Contract {
     }
 
     fn contribs(env: &Env, loan_id: u64) -> Map<Address, i128> {
-        env.storage().persistent().get(&DataKey::Contribs(loan_id)).unwrap()
+        env.storage()
+            .persistent()
+            .get(&DataKey::Contribs(loan_id))
+            .unwrap()
     }
 
     fn claims(env: &Env, loan_id: u64) -> Map<Address, i128> {
-        env.storage().persistent().get(&DataKey::Claims(loan_id)).unwrap()
+        env.storage()
+            .persistent()
+            .get(&DataKey::Claims(loan_id))
+            .unwrap()
     }
 
     /// Distribute `payout` among lenders pro-rata to their contributions.
@@ -328,14 +385,21 @@ impl Contract {
                 claims.set(addr.clone(), c * payout / loan.principal);
             }
         }
-        env.storage().persistent().set(&DataKey::Claims(loan.id), &claims);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Claims(loan.id), &claims);
     }
 
     fn bump_stats(env: &Env, user: &Address, f: impl FnOnce(&mut UserStats)) {
-        let mut stats: UserStats =
-            env.storage().persistent().get(&DataKey::Stats(user.clone())).unwrap_or_default();
+        let mut stats: UserStats = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Stats(user.clone()))
+            .unwrap_or_default();
         f(&mut stats);
-        env.storage().persistent().set(&DataKey::Stats(user.clone()), &stats);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Stats(user.clone()), &stats);
     }
 }
 

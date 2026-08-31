@@ -24,7 +24,11 @@ fn setup() -> Setup {
     let contract_id = env.register(Contract, ());
     let client = ContractClient::new(&env, &contract_id);
     client.initialize(&token);
-    Setup { env, token, contract_id }
+    Setup {
+        env,
+        token,
+        contract_id,
+    }
 }
 
 impl Setup {
@@ -54,12 +58,9 @@ fn test_request_loan_and_getters() {
     let s = setup();
     let borrower = Address::generate(&s.env);
 
-    let id = s.client().request_loan(
-        &borrower,
-        &xlm(1_000),
-        &(30 * 24 * 3600),
-        &1200u32,
-    );
+    let id = s
+        .client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     assert_eq!(id, 0);
     assert_eq!(s.client().loans_count(), 1);
 
@@ -72,7 +73,9 @@ fn test_request_loan_and_getters() {
     assert_eq!(loan.status, LoanStatus::Pending);
     assert_eq!(loan.deadline, 0);
 
-    let id2 = s.client().request_loan(&borrower, &xlm(500), &(10 * 24 * 3600), &500u32);
+    let id2 = s
+        .client()
+        .request_loan(&borrower, &xlm(500), &(10 * 24 * 3600), &500u32);
     assert_eq!(id2, 1);
     assert_eq!(s.client().loans_count(), 2);
 }
@@ -84,7 +87,8 @@ fn test_fund_partial_then_full_disburses_to_borrower() {
     let lender = Address::generate(&s.env);
     s.mint(&lender, &xlm(5_000));
 
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
 
     // Partial funding stays in escrow
     s.client().fund_loan(&lender, &0, &xlm(400));
@@ -115,7 +119,8 @@ fn test_overfund_rejected() {
     let borrower = Address::generate(&s.env);
     let lender = Address::generate(&s.env);
     s.mint(&lender, &xlm(5_000));
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().fund_loan(&lender, &0, &xlm(1_200));
 }
 
@@ -126,7 +131,8 @@ fn test_fund_non_pending_rejected() {
     let borrower = Address::generate(&s.env);
     let lender = Address::generate(&s.env);
     s.mint(&lender, &xlm(5_000));
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().fund_loan(&lender, &0, &xlm(1_000));
     // Already fully funded (Active) — further funding rejected
     s.client().fund_loan(&lender, &0, &xlm(100));
@@ -142,7 +148,8 @@ fn test_repay_with_interest_and_proportional_withdrawal() {
     s.mint(&bob, &xlm(400));
     s.mint(&borrower, &xlm(2_000));
 
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().fund_loan(&alice, &0, &xlm(600)); // 60%
     s.client().fund_loan(&bob, &0, &xlm(400)); // 40%
 
@@ -189,7 +196,8 @@ fn test_repay_wrong_caller_rejected() {
     let other = Address::generate(&s.env);
     let lender = Address::generate(&s.env);
     s.mint(&lender, &xlm(5_000));
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().fund_loan(&lender, &0, &xlm(1_000));
     s.client().repay(&other, &0, &xlm(100));
 }
@@ -202,7 +210,8 @@ fn test_overrepay_rejected() {
     let lender = Address::generate(&s.env);
     s.mint(&lender, &xlm(5_000));
     s.mint(&borrower, &xlm(5_000));
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().fund_loan(&lender, &0, &xlm(1_000));
     s.client().repay(&borrower, &0, &xlm(1_130));
 }
@@ -213,7 +222,8 @@ fn test_repay_pending_rejected() {
     let s = setup();
     let borrower = Address::generate(&s.env);
     s.mint(&borrower, &xlm(5_000));
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().repay(&borrower, &0, &xlm(100));
 }
 
@@ -224,7 +234,8 @@ fn test_partial_repay_accumulates() {
     let lender = Address::generate(&s.env);
     s.mint(&lender, &xlm(5_000));
     s.mint(&borrower, &xlm(5_000));
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().fund_loan(&lender, &0, &xlm(1_000));
 
     s.client().repay(&borrower, &0, &xlm(300));
@@ -249,7 +260,8 @@ fn test_late_repayment_marks_late() {
     let lender = Address::generate(&s.env);
     s.mint(&lender, &xlm(5_000));
     s.mint(&borrower, &xlm(5_000));
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &100u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &100u32);
     s.client().fund_loan(&lender, &0, &xlm(1_000));
 
     // Jump past deadline
@@ -276,7 +288,8 @@ fn test_default_pool_covers_lenders() {
     s.client().deposit_pool(&pool_staker, &xlm(2_000));
     assert_eq!(s.client().pool_balance(), xlm(2_000));
 
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().fund_loan(&lender, &0, &xlm(1_000));
 
     // Borrower repays 400 of 1120 then goes silent past the deadline
@@ -293,8 +306,11 @@ fn test_default_pool_covers_lenders() {
     assert_eq!(s.client().claimable(&lender, &0), xlm(1_120));
     s.client().withdraw(&lender, &0);
     assert_eq!(s.token_client().balance(&lender), xlm(5_120)); // 5000 - 1000 funded + 1120 payout
-    // Contract escrow still holds the remaining insurance pool funds
-    assert_eq!(s.token_client().balance(&s.contract_id), s.client().pool_balance());
+                                                               // Contract escrow still holds the remaining insurance pool funds
+    assert_eq!(
+        s.token_client().balance(&s.contract_id),
+        s.client().pool_balance()
+    );
     assert_eq!(s.client().pool_balance(), xlm(1_280));
 
     let stats = s.client().user_stats(&borrower);
@@ -314,7 +330,8 @@ fn test_default_without_pool_partial_payout() {
     s.mint(&alice, &xlm(700));
     s.mint(&bob, &xlm(400));
 
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().fund_loan(&alice, &0, &xlm(600));
     s.client().fund_loan(&bob, &0, &xlm(400));
 
@@ -334,7 +351,8 @@ fn test_mark_default_before_deadline_rejected() {
     let borrower = Address::generate(&s.env);
     let lender = Address::generate(&s.env);
     s.mint(&lender, &xlm(5_000));
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().fund_loan(&lender, &0, &xlm(1_000));
     s.client().mark_default(&0);
 }
@@ -346,7 +364,8 @@ fn test_mark_default_twice_rejected() {
     let borrower = Address::generate(&s.env);
     let lender = Address::generate(&s.env);
     s.mint(&lender, &xlm(5_000));
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().fund_loan(&lender, &0, &xlm(1_000));
     s.env.ledger().with_mut(|li| li.timestamp += 31 * 24 * 3600);
     s.client().mark_default(&0);
@@ -372,7 +391,9 @@ fn test_credit_score_progression() {
 
     // Two successful loans → 600 + 200 = 800
     for _ in 0..2 {
-        let id = s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+        let id = s
+            .client()
+            .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
         s.client().fund_loan(&lender, &id, &xlm(1_000));
         let due = xlm(1_000) + xlm(1_000) * 1200 / 10000;
         s.client().repay(&borrower, &id, &due);
@@ -380,7 +401,9 @@ fn test_credit_score_progression() {
     assert_eq!(s.client().credit_score(&borrower), 800);
 
     // Third loan defaults (no pool) → 800 - 150 = 650
-    let id = s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    let id = s
+        .client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     s.client().fund_loan(&lender, &id, &xlm(1_000));
     s.env.ledger().with_mut(|li| li.timestamp += 31 * 24 * 3600);
     s.client().mark_default(&id);
@@ -398,7 +421,13 @@ fn test_events_emitted() {
     // so we capture topics immediately after each contract call.
     let topic_names = |s: &Setup| -> soroban_sdk::Vec<Symbol> {
         let mut names = soroban_sdk::Vec::<Symbol>::new(&s.env);
-        for e in s.env.events().all().filter_by_contract(&s.contract_id).events() {
+        for e in s
+            .env
+            .events()
+            .all()
+            .filter_by_contract(&s.contract_id)
+            .events()
+        {
             if let soroban_sdk::xdr::ContractEventBody::V0(body) = &e.body {
                 if let Some(first) = body.topics.first() {
                     if let Ok(sym) = Symbol::try_from_val(&s.env, first) {
@@ -410,7 +439,8 @@ fn test_events_emitted() {
         names
     };
 
-    s.client().request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
+    s.client()
+        .request_loan(&borrower, &xlm(1_000), &(30 * 24 * 3600), &1200u32);
     assert!(topic_names(&s).contains(&symbol_short!("loan_req")));
 
     s.client().fund_loan(&lender, &0, &xlm(1_000));
@@ -419,4 +449,3 @@ fn test_events_emitted() {
     s.client().deposit_pool(&lender, &xlm(50));
     assert!(topic_names(&s).contains(&symbol_short!("pool_dep")));
 }
-
