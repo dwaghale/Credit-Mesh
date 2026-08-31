@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short,
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error,
     token::Client as TokenClient, Address, Env, Map,
 };
 
@@ -50,23 +50,12 @@ pub struct Loan {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct UserStats {
     pub loans_taken: u32,
     pub repaid_on_time: u32,
     pub repaid_late: u32,
     pub defaults: u32,
-}
-
-impl Default for UserStats {
-    fn default() -> Self {
-        Self {
-            loans_taken: 0,
-            repaid_on_time: 0,
-            repaid_late: 0,
-            defaults: 0,
-        }
-    }
 }
 
 #[contracttype]
@@ -78,6 +67,52 @@ pub enum DataKey {
     Contribs(u64),
     Claims(u64),
     Stats(Address),
+}
+
+// ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
+#[contractevent(topics = ["loan_req"])]
+pub struct LoanReqEvent {
+    pub borrower: Address,
+    pub id: u64,
+    pub amount: i128,
+    pub apr_bps: u32,
+}
+
+#[contractevent(topics = ["funded"])]
+pub struct FundedEvent {
+    pub lender: Address,
+    pub loan_id: u64,
+    pub amount: i128,
+}
+
+#[contractevent(topics = ["withdrew"])]
+pub struct WithdrewEvent {
+    pub lender: Address,
+    pub loan_id: u64,
+    pub claim: i128,
+}
+
+#[contractevent(topics = ["repaid"])]
+pub struct RepaidEvent {
+    pub borrower: Address,
+    pub loan_id: u64,
+    pub due: i128,
+}
+
+#[contractevent(topics = ["pool_dep"])]
+pub struct PoolDepEvent {
+    pub depositor: Address,
+    pub amount: i128,
+}
+
+#[contractevent(topics = ["default"])]
+pub struct DefaultEvent {
+    pub loan_id: u64,
+    pub borrower: Address,
+    pub repaid: i128,
+    pub topup: i128,
 }
 
 /// On-chain credit score: starts at 600; +100 per on-time repayment (max +300),
@@ -143,10 +178,13 @@ impl Contract {
             .persistent()
             .extend_ttl(&DataKey::Loan(id), 100, 172_800);
 
-        env.events().publish(
-            (symbol_short!("loan_req"),),
-            (borrower, id, amount, apr_bps),
-        );
+        LoanReqEvent {
+            borrower,
+            id,
+            amount,
+            apr_bps,
+        }
+        .publish(&env);
         id
     }
 
@@ -166,8 +204,9 @@ impl Contract {
             panic_with_error!(&env, Error::Overfund);
         }
 
+        let contract_address = env.current_contract_address();
         let token = TokenClient::new(&env, &Self::token(&env));
-        token.transfer(&lender, &env.current_contract_address(), &amount);
+        token.transfer(&lender, &contract_address, &amount);
 
         let mut contribs = Self::contribs(&env, loan_id);
         let prev = contribs.get(lender.clone()).unwrap_or(0);
@@ -181,11 +220,7 @@ impl Contract {
             // Fully funded: activate and disburse to borrower
             loan.status = LoanStatus::Active;
             loan.deadline = env.ledger().timestamp() + loan.term_secs;
-            token.transfer(
-                &env.current_contract_address(),
-                &loan.borrower,
-                &loan.principal,
-            );
+            token.transfer(&contract_address, &loan.borrower, &loan.principal);
         }
         env.storage()
             .persistent()
@@ -194,8 +229,12 @@ impl Contract {
             .persistent()
             .extend_ttl(&DataKey::Contribs(loan_id), 100, 172_800);
 
-        env.events()
-            .publish((symbol_short!("funded"),), (lender, loan_id, amount));
+        FundedEvent {
+            lender,
+            loan_id,
+            amount,
+        }
+        .publish(&env);
     }
 
     /// Withdraw a lender's payout after a loan is Repaid or Defaulted.
@@ -211,11 +250,16 @@ impl Contract {
             .persistent()
             .set(&DataKey::Claims(loan_id), &claims);
 
+        let contract_address = env.current_contract_address();
         let token = TokenClient::new(&env, &Self::token(&env));
-        token.transfer(&env.current_contract_address(), &lender, &claim);
+        token.transfer(&contract_address, &lender, &claim);
 
-        env.events()
-            .publish((symbol_short!("withdrew"),), (lender, loan_id, claim));
+        WithdrewEvent {
+            lender,
+            loan_id,
+            claim,
+        }
+        .publish(&env);
         claim
     }
 
@@ -237,8 +281,9 @@ impl Contract {
             panic_with_error!(&env, Error::ExceedsAmountDue);
         }
 
+        let contract_address = env.current_contract_address();
         let token = TokenClient::new(&env, &Self::token(&env));
-        token.transfer(&borrower, &env.current_contract_address(), &amount);
+        token.transfer(&borrower, &contract_address, &amount);
         loan.repaid += amount;
 
         if loan.repaid == due {
@@ -252,8 +297,12 @@ impl Contract {
                     s.repaid_late += 1
                 }
             });
-            env.events()
-                .publish((symbol_short!("repaid"),), (borrower, loan_id, due));
+            RepaidEvent {
+                borrower,
+                loan_id,
+                due,
+            }
+            .publish(&env);
         }
         env.storage()
             .persistent()
@@ -266,15 +315,15 @@ impl Contract {
     pub fn deposit_pool(env: Env, depositor: Address, amount: i128) {
         depositor.require_auth();
         assert!(amount > 0, "amount must be positive");
+        let contract_address = env.current_contract_address();
         let token = TokenClient::new(&env, &Self::token(&env));
-        token.transfer(&depositor, &env.current_contract_address(), &amount);
+        token.transfer(&depositor, &contract_address, &amount);
         let pool: i128 = env.storage().instance().get(&DataKey::Pool).unwrap_or(0);
         env.storage()
             .instance()
             .set(&DataKey::Pool, &(pool + amount));
         env.storage().instance().extend_ttl(100, 172_800);
-        env.events()
-            .publish((symbol_short!("pool_dep"),), (depositor, amount));
+        PoolDepEvent { depositor, amount }.publish(&env);
     }
 
     /// Anyone may trigger a default once a fully-funded loan is past its
@@ -303,10 +352,13 @@ impl Contract {
         Self::settle_claims(&env, &loan, loan.repaid + topup);
         Self::bump_stats(&env, &loan.borrower, |s| s.defaults += 1);
 
-        env.events().publish(
-            (symbol_short!("default"),),
-            (loan_id, loan.borrower.clone(), loan.repaid, topup),
-        );
+        DefaultEvent {
+            loan_id,
+            borrower: loan.borrower.clone(),
+            repaid: loan.repaid,
+            topup,
+        }
+        .publish(&env);
     }
 
     // -- Getters --------------------------------------------------------------

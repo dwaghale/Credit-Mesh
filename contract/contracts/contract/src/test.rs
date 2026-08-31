@@ -428,11 +428,10 @@ fn test_events_emitted() {
             .filter_by_contract(&s.contract_id)
             .events()
         {
-            if let soroban_sdk::xdr::ContractEventBody::V0(body) = &e.body {
-                if let Some(first) = body.topics.first() {
-                    if let Ok(sym) = Symbol::try_from_val(&s.env, first) {
-                        names.push_back(sym);
-                    }
+            let soroban_sdk::xdr::ContractEventBody::V0(body) = &e.body;
+            if let Some(first) = body.topics.first() {
+                if let Ok(sym) = Symbol::try_from_val(&s.env, first) {
+                    names.push_back(sym);
                 }
             }
         }
